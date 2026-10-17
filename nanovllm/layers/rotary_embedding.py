@@ -22,11 +22,24 @@ class RotaryEmbedding(nn.Module):
         rotary_dim: int,
         max_position_embeddings: int,
         base: float,
+        rope_scaling: tuple = (),
     ) -> None:
         super().__init__()
         self.head_size = head_size
         assert rotary_dim == head_size
         inv_freq = 1.0 / (base**(torch.arange(0, rotary_dim, 2, dtype=torch.float) / rotary_dim))
+        scaling = dict(rope_scaling)
+        if scaling.get("rope_type", scaling.get("type")) == "llama3":
+            factor = scaling["factor"]
+            low = scaling["low_freq_factor"]
+            high = scaling["high_freq_factor"]
+            old_context = scaling["original_max_position_embeddings"]
+            wavelength = 2 * torch.pi / inv_freq
+            scaled = torch.where(wavelength > old_context / low, inv_freq / factor, inv_freq)
+            smooth = (old_context / wavelength - low) / (high - low)
+            interpolated = (1 - smooth) * scaled / factor + smooth * scaled
+            medium = (wavelength >= old_context / high) & (wavelength <= old_context / low)
+            inv_freq = torch.where(medium, interpolated, scaled)
         t = torch.arange(max_position_embeddings, dtype=torch.float)
         freqs = torch.einsum("i,j -> ij", t, inv_freq)
         cos = freqs.cos()
@@ -54,6 +67,7 @@ def get_rope(
     rotary_dim: int,
     max_position: int,
     base: float,
+    rope_scaling: tuple = (),
 ):
-    rotary_emb = RotaryEmbedding(head_size, rotary_dim, max_position, base)
+    rotary_emb = RotaryEmbedding(head_size, rotary_dim, max_position, base, rope_scaling)
     return rotary_emb

@@ -15,7 +15,10 @@ class Sequence:
     block_size = 256
     counter = count()
 
-    def __init__(self, token_ids: list[int], sampling_params = SamplingParams()):
+    def __init__(self, token_ids: list[int], sampling_params=None):
+        if not token_ids:
+            raise ValueError("prompt must contain at least one token")
+        sampling_params = sampling_params or SamplingParams()
         self.seq_id = next(Sequence.counter)
         self.status = SequenceStatus.WAITING
         self.token_ids = copy(token_ids)
@@ -27,6 +30,8 @@ class Sequence:
         self.is_prefill = True
         self.block_table = []
         self.temperature = sampling_params.temperature
+        self.top_k = sampling_params.top_k
+        self.top_p = sampling_params.top_p
         self.max_tokens = sampling_params.max_tokens
         self.ignore_eos = sampling_params.ignore_eos
 
@@ -71,10 +76,14 @@ class Sequence:
 
     def __getstate__(self):
         last_state = self.last_token if not self.is_prefill else self.token_ids
-        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)
+        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens,
+                self.num_scheduled_tokens, self.block_table, last_state,
+                self.is_prefill, self.temperature, self.top_k, self.top_p)
 
     def __setstate__(self, state):
-        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state = state
+        (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens,
+         self.num_scheduled_tokens, self.block_table, last_state,
+         self.is_prefill, self.temperature, self.top_k, self.top_p) = state
         if isinstance(last_state, list):
             self.token_ids = last_state
             self.last_token = self.token_ids[-1]

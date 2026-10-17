@@ -193,3 +193,11 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# Local model weights and raw cloud experiment data
+/models/
+results/environment/
+results/gpu-*.json
+results/qwen*-*.json
+results/llama-*.json
+/results/qwen38/
+.venv-download/

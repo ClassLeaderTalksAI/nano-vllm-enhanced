@@ -10,6 +10,47 @@
 
 A lightweight vLLM implementation built from scratch.
 
+## This fork: nano-vLLM Enhanced
+
+Personal inference-engine extension based on upstream commit `bb823b3`.
+The upstream already implements basic prompt chunking. This fork adds:
+
+- Per-request top-k / top-p sampling and temperature-zero greedy decoding.
+- Decode-first scheduling with a shared token budget and mixed prefill/decode batches.
+- Explicit dense Qwen2.5 / Qwen3 / Llama architecture validation, independent QK
+  normalization and QKV bias, and Llama 3.1/3.2 RoPE scaling.
+- CPU correctness tests, a real-checkpoint GPU validation script, and a mixed-arrival
+  benchmark that saves per-token timing and experiment metadata.
+
+**Validation:** CPU tests pass (reference attention in architecture tests).
+Real checkpoints, FlashAttention, CUDA graphs, tensor parallel execution and performance
+have **not yet been validated on a GPU in this fork**. Model support is conditional
+on the documented dense configuration checks, not all variants of those families.
+
+- [Three-day plan and interview positioning (中文)](docs/THREE_DAY_PLAN.zh-CN.md)
+- [Implementation, support matrix and limitations](docs/IMPLEMENTATION.md)
+- [Cloud GPU validation and benchmark runbook](docs/GPU_RUNBOOK.md)
+- [Qwen3.8-27B deployment in a separate vLLM container (中文)](deploy/qwen38/README.zh-CN.md)
+
+The three-day scope also includes a separately hosted Qwen3.8-27B experiment using
+vLLM. Its launcher and HTTP probe are prepared; deployment is pending cloud GPU access.
+This is deployment/measurement work, independent of native nano-vLLM model support.
+
+```python
+from nanovllm import LLM, SamplingParams
+
+llm = LLM("/models/Qwen3-0.6B", max_num_batched_tokens=256,
+          scheduling_policy="decode_first", enforce_eager=True)
+outputs = llm.generate(["Explain KV caching."],
+                       SamplingParams(temperature=0.7, top_k=40, top_p=0.9))
+```
+
+For a controlled scheduler comparison, use `scheduling_policy="prefill_first"`
+with the same token budget. That baseline retains upstream prompt chunking.
+
+The features and performance table below describe the **upstream project**;
+the published throughput numbers are not measurements of this fork.
+
 ## Key Features
 
 * 🚀 **Fast offline inference** - Comparable inference speeds to vLLM

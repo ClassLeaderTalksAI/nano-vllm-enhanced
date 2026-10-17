@@ -16,8 +16,12 @@ class LLMEngine:
 
     def __init__(self, model, **kwargs):
         config_fields = {field.name for field in fields(Config)}
+        unknown = set(kwargs) - config_fields
+        if unknown:
+            raise TypeError(f"unknown engine options: {sorted(unknown)}")
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
         config = Config(model, **config_kwargs)
+        self.config = config
         Sequence.block_size = config.kvcache_block_size
         self.ps = []
         self.events = []
@@ -35,6 +39,8 @@ class LLMEngine:
         atexit.register(self.exit)
 
     def exit(self):
+        if not hasattr(self, "model_runner"):
+            return
         self.model_runner.call("exit")
         del self.model_runner
         for p in self.ps:
@@ -43,14 +49,26 @@ class LLMEngine:
     def add_request(self, prompt: str | list[int], sampling_params: SamplingParams):
         if isinstance(prompt, str):
             prompt = self.tokenizer.encode(prompt)
+        if len(prompt) + sampling_params.max_tokens > self.config.max_model_len:
+            raise ValueError("prompt length + max_tokens exceeds max_model_len")
+        required_blocks = (len(prompt) + sampling_params.max_tokens - 1 + Sequence.block_size - 1) // Sequence.block_size
+        if required_blocks > self.config.num_kvcache_blocks:
+            raise ValueError("prompt plus output budget cannot fit in the KV pool")
         seq = Sequence(prompt, sampling_params)
         self.scheduler.add(seq)
+        return seq.seq_id
 
     def step(self):
         seqs, is_prefill = self.scheduler.schedule()
+        self.last_step_stats = {
+            "prefill_tokens": sum(s.num_scheduled_tokens for s in seqs if s.is_prefill),
+            "decode_tokens": sum(s.num_scheduled_tokens for s in seqs if not s.is_prefill),
+        }
         num_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else -len(seqs)
         token_ids = self.model_runner.call("run", seqs, is_prefill)
         self.scheduler.postprocess(seqs, token_ids, is_prefill)
+        self.last_step_token_ids = [(s.seq_id, token_id) for s, token_id in zip(seqs, token_ids)
+                                    if token_id is not None]
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         return outputs, num_tokens
 
@@ -66,6 +84,8 @@ class LLMEngine:
         pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True, disable=not use_tqdm)
         if not isinstance(sampling_params, list):
             sampling_params = [sampling_params] * len(prompts)
+        if len(prompts) != len(sampling_params):
+            raise ValueError("one SamplingParams is required per prompt")
         for prompt, sp in zip(prompts, sampling_params):
             self.add_request(prompt, sp)
         outputs = {}
@@ -73,10 +93,11 @@ class LLMEngine:
         while not self.is_finished():
             t = perf_counter()
             output, num_tokens = self.step()
-            if num_tokens > 0:
-                prefill_throughput = num_tokens / (perf_counter() - t)
-            else:
-                decode_throughput = -num_tokens / (perf_counter() - t)
+            elapsed = perf_counter() - t
+            if self.last_step_stats["prefill_tokens"]:
+                prefill_throughput = self.last_step_stats["prefill_tokens"] / elapsed
+            if self.last_step_stats["decode_tokens"]:
+                decode_throughput = self.last_step_stats["decode_tokens"] / elapsed
             pbar.set_postfix({
                 "Prefill": f"{int(prefill_throughput)}tok/s",
                 "Decode": f"{int(decode_throughput)}tok/s",

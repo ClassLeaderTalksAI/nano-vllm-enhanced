@@ -1,0 +1,28 @@
+{
+  "source": "https://huggingface.co/Qwen/Qwen3.8-27B/resolve/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/model.safetensors.index.json",
+  "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+  "index_sha256": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df",
+  "metadata": {
+    "total_size": 55562855904.0
+  },
+  "num_tensors": 1199,
+  "tensor_name_samples": [
+    "lm_head.weight",
+    "model.language_model.embed_tokens.weight",
+    "model.language_model.layers.0.input_layernorm.weight",
+    "model.language_model.layers.0.linear_attn.A_log",
+    "model.language_model.layers.0.linear_attn.conv1d.weight",
+    "model.language_model.layers.0.linear_attn.dt_bias",
+    "model.language_model.layers.0.linear_attn.in_proj_a.weight",
+    "model.language_model.layers.0.linear_attn.in_proj_b.weight",
+    "model.language_model.layers.0.linear_attn.in_proj_qkv.weight",
+    "model.language_model.layers.0.linear_attn.in_proj_z.weight",
+    "model.language_model.layers.0.linear_attn.norm.weight",
+    "model.language_model.layers.0.linear_attn.out_proj.weight",
+    "model.language_model.layers.0.mlp.down_proj.weight",
+    "model.language_model.layers.0.mlp.gate_proj.weight",
+    "model.language_model.layers.0.mlp.up_proj.weight",
+    "model.language_model.layers.0.post_attention_layernorm.weight"
+  ],
+  "note": "index metadata only; no checkpoint weights downloaded"
+}
